@@ -1,0 +1,16 @@
+version: "3.1"
+services:
+  pylucene:
+    container_name: pylucene
+    build: ./pylucene/
+    image: pylucene
+    ports:
+      - "8042:8042"
+    networks:
+      - pylucene
+    volumes:
+      - ./data:/index/
+
+networks:
+  pylucene:
+    driver: bridge

@@ -31,7 +31,10 @@ def init_vm():
 
 class Search(BaseModel):
     query: str
-    architectural: bool
+    # nullable
+    existence: bool
+    executive: bool
+    property: bool
 
 
 @app.post("/create-index")
@@ -94,8 +97,13 @@ def search(request: Search):
     searcher = IndexSearcher(reader)
 
     search_string = f"text: {request.query}"
-    if request.architectural:
-        search_string += " AND (existence: True OR property: True OR executive: True)"
+    if request.executive is not None:
+        search_string += " AND executive: " + str(request.executive)
+    if request.existence is not None:
+        search_string += " AND existence: " + str(request.existence)
+    if request.property is not None:
+        search_string += " AND property: " + str(request.property)
+    
     query = QueryParser("text", StandardAnalyzer()).parse(search_string)
     hits = searcher.search(query, 10)
 

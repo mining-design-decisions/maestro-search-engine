@@ -29,6 +29,11 @@ def init_vm():
         initialized_vms[thread_id] = True
 
 
+
+class CreateIndex(BaseModel):
+    database_url: str 
+
+
 class Search(BaseModel):
     query: str
     # nullable
@@ -38,13 +43,13 @@ class Search(BaseModel):
 
 
 @app.post("/create-index")
-def create_index():
+def create_index(request: CreateIndex):
     init_vm()
     index_directory = SimpleFSDirectory(Paths.get("/index/"))
     writer_config = IndexWriterConfig(StandardAnalyzer())
     writer = IndexWriter(index_directory, writer_config)
 
-    url = "https://issues-db.nl:8000"
+    url = request.database_url
     domains = [
         "data storage & processing",
         "content management",

@@ -29,19 +29,27 @@ def init_vm():
         initialized_vms[thread_id] = True
 
 
+
+class CreateIndex(BaseModel):
+    database_url: str 
+
+
 class Search(BaseModel):
     query: str
-    architectural: bool
+    # nullable
+    existence: bool
+    executive: bool
+    property: bool
 
 
 @app.post("/create-index")
-def create_index():
+def create_index(request: CreateIndex):
     init_vm()
     index_directory = SimpleFSDirectory(Paths.get("/index/"))
     writer_config = IndexWriterConfig(StandardAnalyzer())
     writer = IndexWriter(index_directory, writer_config)
 
-    url = "https://issues-db.nl:8000"
+    url = request.database_url
     domains = [
         "data storage & processing",
         "content management",
@@ -94,8 +102,13 @@ def search(request: Search):
     searcher = IndexSearcher(reader)
 
     search_string = f"text: {request.query}"
-    if request.architectural:
-        search_string += " AND (existence: True OR property: True OR executive: True)"
+    if request.executive is not None:
+        search_string += " AND executive: " + str(request.executive)
+    if request.existence is not None:
+        search_string += " AND existence: " + str(request.existence)
+    if request.property is not None:
+        search_string += " AND property: " + str(request.property)
+    
     query = QueryParser("text", StandardAnalyzer()).parse(search_string)
     hits = searcher.search(query, 10)
 

@@ -6,7 +6,7 @@ queries which can be enhanced with deep learning classifiers' predictions.
 The setup process is described below. Note that, because it uses HTTPS, it needs an SSL certificate (fullchain.pem and
 privkey.pem).
 ```
-git clone git@github.com:GWNLekkah/add-search-engine.git
+git clone git@github.com:mining-design-decisions/maestro-search-engine.git
 cd maestro-search-engine
 sudo cp /etc/letsencrypt/live/issues-db.nl/fullchain.pem pylucene/fullchain.pem
 sudo cp /etc/letsencrypt/live/issues-db.nl/privkey.pem pylucene/privkey.pem

@@ -15,6 +15,7 @@ from org.apache.lucene.store import SimpleFSDirectory
 from pydantic import BaseModel
 import threading
 import requests
+from typing import Optional
 
 from .config import SSL_KEYFILE, SSL_CERTFILE
 
@@ -36,10 +37,9 @@ class CreateIndex(BaseModel):
 
 class Search(BaseModel):
     query: str
-    # nullable
-    existence: bool
-    executive: bool
-    property: bool
+    existence: Optional[bool]
+    executive: Optional[bool]
+    property: Optional[bool]
 
 
 @app.post("/create-index")

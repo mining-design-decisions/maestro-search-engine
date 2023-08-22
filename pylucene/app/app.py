@@ -1,6 +1,6 @@
 import lucene
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from java.nio.file import Paths
 from org.apache.lucene.analysis.standard import StandardAnalyzer
 from org.apache.lucene.document import Document, TextField, Field
@@ -21,6 +21,8 @@ from .config import SSL_KEYFILE, SSL_CERTFILE
 app = FastAPI()
 initialized_vms = {}
 
+index_build_lock = threading.Lock()
+
 
 def init_vm():
     thread_id = threading.get_ident()
@@ -28,6 +30,9 @@ def init_vm():
         lucene.initVM()
         initialized_vms[thread_id] = True
 
+
+def have_indices():
+    return DirectoryReader.indexExists(SimpleFSDirectory(Paths.get("/index/")))
 
 
 class CreateIndex(BaseModel):
@@ -42,61 +47,82 @@ class Search(BaseModel):
     property: bool
 
 
+@app.get('/index-status')
+def get_index_status():
+    init_vm()
+    have = have_indices()
+    if not have:
+        return {'status': 'no-index'}
+    if index_build_lock.acquire(blocking=False):
+        index_build_lock.release()
+        return {'status': 'have-index'}
+    else:
+        return {'status': 'building-index'}
+
+
 @app.post("/create-index")
 def create_index(request: CreateIndex):
     init_vm()
-    index_directory = SimpleFSDirectory(Paths.get("/index/"))
-    writer_config = IndexWriterConfig(StandardAnalyzer())
-    writer = IndexWriter(index_directory, writer_config)
+    if not index_build_lock.acquire(blocking=False):
+        return {'result': 'busy'}
+    try:
+        index_directory = SimpleFSDirectory(Paths.get("/index/"))
+        writer_config = IndexWriterConfig(StandardAnalyzer())
+        writer = IndexWriter(index_directory, writer_config)
 
-    url = request.database_url
-    domains = [
-        "data storage & processing",
-        "content management",
-        "devops and cloud",
-        "software development tools",
-        "web development",
-        "soa and middlewares",
-    ]
-    for domain in domains:
-        payload = {"filter": {"tags": {"$eq": f"project-merged_domain={domain}"}}}
-        issue_ids = requests.get(
-            f"{url}/issue-ids",
-            json=payload,
-        ).json()
-        predictions = requests.get(
-            f"{url}/models/648ee4526b3fde4b1b33e099/versions/648f1f6f6b3fde4b1b3429cf/predictions",
-            json=issue_ids,
-        ).json()["predictions"]
-        issue_ids["attributes"] = ["key", "summary", "description"]
-        issue_data = requests.get(f"{url}/issue-data", json=issue_ids).json()["data"]
+        url = request.database_url
+        domains = [
+            "data storage & processing",
+            "content management",
+            "devops and cloud",
+            "software development tools",
+            "web development",
+            "soa and middlewares",
+        ]
+        for domain in domains:
+            payload = {"filter": {"tags": {"$eq": f"project-merged_domain={domain}"}}}
+            issue_ids = requests.get(
+                f"{url}/issue-ids",
+                json=payload,
+            ).json()
+            predictions = requests.get(
+                f"{url}/models/648ee4526b3fde4b1b33e099/versions/648f1f6f6b3fde4b1b3429cf/predictions",
+                json=issue_ids,
+            ).json()["predictions"]
+            issue_ids["attributes"] = ["key", "summary", "description"]
+            issue_data = requests.get(f"{url}/issue-data", json=issue_ids).json()["data"]
 
-        for issue_id in issue_ids["issue_ids"]:
-            doc = Document()
-            doc.add(Field("issue_id", issue_id, TextField.TYPE_STORED))
-            doc.add(
-                Field("issue_key", issue_data[issue_id]["key"], TextField.TYPE_STORED)
-            )
-            text = ". ".join(
-                [issue_data[issue_id]["summary"], issue_data[issue_id]["description"]]
-            )
-            doc.add(Field("text", text, TextField.TYPE_STORED))
-            for class_ in ["existence", "property", "executive"]:
+            for issue_id in issue_ids["issue_ids"]:
+                doc = Document()
+                doc.add(Field("issue_id", issue_id, TextField.TYPE_STORED))
                 doc.add(
-                    Field(
-                        class_,
-                        str(predictions[issue_id][class_]["prediction"]),
-                        TextField.TYPE_STORED,
-                    )
+                    Field("issue_key", issue_data[issue_id]["key"], TextField.TYPE_STORED)
                 )
-            writer.addDocument(doc)
+                text = ". ".join(
+                    [issue_data[issue_id]["summary"], issue_data[issue_id]["description"]]
+                )
+                doc.add(Field("text", text, TextField.TYPE_STORED))
+                for class_ in ["existence", "property", "executive"]:
+                    doc.add(
+                        Field(
+                            class_,
+                            str(predictions[issue_id][class_]["prediction"]),
+                            TextField.TYPE_STORED,
+                        )
+                    )
+                writer.addDocument(doc)
 
-    writer.close()
+        writer.close()
 
+        return {'result': 'done'}
+    finally:
+        index_build_lock.release()
 
 @app.get("/search")
 def search(request: Search):
     init_vm()
+    if not have_indices():
+        raise HTTPException(status_code=400, detail='Index not initialised')
     index_directory = SimpleFSDirectory(Paths.get("/index/"))
     reader = DirectoryReader.open(index_directory)
     searcher = IndexSearcher(reader)

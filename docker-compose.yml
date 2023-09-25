@@ -5,12 +5,24 @@ services:
     build: ./pylucene/
     image: pylucene
     ports:
-      - "8042:8042"
+      - "8043:8043"
     networks:
-      - pylucene
+      - pylucene-network
     volumes:
       - ./data:/index/
+    environment:
+      - SE_ALLOW_UNSAFE_SSL=TRUE
+  availability-proxy:
+    container_name: availability-proxy
+    build: ./status_proxy
+    image: availability-proxy
+    networks:
+      - pylucene-network
+    ports:
+      - "8042:8042"
+    environment:
+      - SE_BACKEND_SERVER=http://0.0.0.0:8043
 
 networks:
-  pylucene:
+  pylucene-network:
     driver: bridge

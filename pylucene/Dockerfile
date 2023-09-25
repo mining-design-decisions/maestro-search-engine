@@ -18,6 +18,13 @@ WORKDIR /usr/src
 RUN rm -rf pylucene
 
 WORKDIR /python-docker
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > rustup-init.sh
+RUN sh rustup-init.sh -y
+ENV PATH="$PATH:/root/.cargo/bin"
+RUN apt install pkg-config
+RUN apt-get -y install libssl-dev
+RUN python3.10 -m pip install --upgrade pip setuptools
+RUN pip3 install setuptools_rust
 COPY requirements.txt requirements.txt
 RUN pip3 install -r requirements.txt
 COPY . .

@@ -136,7 +136,8 @@ class IssueIndex:
         selected_index = None
         for selected_index, data in self._metadata['indexes'].items():
             if data['model']['id'] != model_id or data['model']['version'] != version_id:
-                continue
+                if model_id is not None and version_id is not None:
+                    continue
             for jira_repo, projects in projects_by_repo.items():
                 for project in projects:
                     if project not in data['included-projects'][jira_repo]:
@@ -181,12 +182,9 @@ class IssueIndex:
 
         hits = searcher.search(query, num_items)
 
-        print('Finalised search')
-
         response = []
         for hit in hits.scoreDocs:
             doc = searcher.doc(hit.doc)
-            print([x.name() for x in doc.getFields()])
             response.append(
                 {
                     "hit_score": hit.score,

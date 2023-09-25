@@ -48,8 +48,8 @@ class Search(BaseModel):
     num_results: int
     repos_and_projects: dict[str, list[str]]
     query: str
-    model_id: str
-    version_id: str
+    model_id: str | None
+    version_id: str | None 
     predictions: PredictionSpec
 
 

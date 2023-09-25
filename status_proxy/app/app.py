@@ -27,8 +27,11 @@ async def create_index(request: fastapi.Request):
     if api_lock.acquire(blocking=False):
         try:
             async with httpx.AsyncClient(verify=not ALLOW_UNSAFE_SSL, timeout=None) as client:
-                await client.post(f'{BACKEND_SERVER}/create-index',
-                                  json=await request.json())
+                response = await client.post(f'{BACKEND_SERVER}/create-index',
+                                             json=await request.json())
+                if response.status_code != 200:
+                    raise fastapi.HTTPException(status_code=response.status_code, detail=response.json())
+                return response.json()
         finally:
             api_lock.release()
 
@@ -38,8 +41,11 @@ async def search(request: fastapi.Request):
     if api_lock.acquire(blocking=False):
         try:
             async with httpx.AsyncClient(verify=not ALLOW_UNSAFE_SSL, timeout=None) as client:
-                await client.post(f'{BACKEND_SERVER}/search',
-                                  json=await request.json())
+                response = await client.post(f'{BACKEND_SERVER}/search',
+                                             json=await request.json())
+                if response.status_code != 200:
+                    raise fastapi.HTTPException(status_code=response.status_code, detail=response.json())
+                return response.json()
         finally:
             api_lock.release()
 

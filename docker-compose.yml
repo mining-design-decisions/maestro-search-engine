@@ -21,7 +21,8 @@ services:
     ports:
       - "8042:8042"
     environment:
-      - SE_BACKEND_SERVER=http://0.0.0.0:8043
+      - SE_BACKEND_SERVER=https://pylucene:8043
+      - SE_ALLOW_UNSAFE_SSL=TRUE
 
 networks:
   pylucene-network:

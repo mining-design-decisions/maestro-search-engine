@@ -11,6 +11,7 @@ app = fastapi.FastAPI()
 api_lock = threading.Lock()
 
 BACKEND_SERVER = os.environ['SE_BACKEND_SERVER']
+ALLOW_UNSAFE_SSL = os.environ['SE_ALLOW_UNSAFE_SSL'].lower() == 'true'
 
 @app.get('/index-status')
 async def get_index_status(request: fastapi.Request):
@@ -25,7 +26,9 @@ async def get_index_status(request: fastapi.Request):
 async def create_index(request: fastapi.Request):
     if api_lock.acquire(blocking=False):
         try:
-            return await httpx.post(f'{BACKEND_SERVER}/create-index', json=await request.json())
+            async with httpx.AsyncClient(verify=not ALLOW_UNSAFE_SSL, timeout=None) as client:
+                await client.post(f'{BACKEND_SERVER}/create-index',
+                                  json=await request.json())
         finally:
             api_lock.release()
 
@@ -34,7 +37,9 @@ async def create_index(request: fastapi.Request):
 async def search(request: fastapi.Request):
     if api_lock.acquire(blocking=False):
         try:
-            return await httpx.post(f'{BACKEND_SERVER}/search', json=await request.json())
+            async with httpx.AsyncClient(verify=not ALLOW_UNSAFE_SSL, timeout=None) as client:
+                await client.post(f'{BACKEND_SERVER}/search',
+                                  json=await request.json())
         finally:
             api_lock.release()
 

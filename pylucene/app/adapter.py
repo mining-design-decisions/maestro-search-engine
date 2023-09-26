@@ -20,6 +20,14 @@ from org.apache.lucene.search import IndexSearcher
 from org.apache.lucene.store import SimpleFSDirectory
 
 
+class MissingPrediction(Exception):
+
+    def __init__(self, ident, key):
+        super().__init__(f'Missing prediction for issue {ident} ({key})')
+        self.ident = ident
+        self.key = key
+
+
 class PredictionSelection(enum.Enum):
     TRUE = enum.auto()
     FALSE = enum.auto()
@@ -120,7 +128,10 @@ class IssueIndex:
             doc.add(Field('summary', issue.summary, StoredField.TYPE))
             doc.add(Field('description', issue.description, StoredField.TYPE))
             doc.add(Field('text', f'{issue.summary}. {issue.description}', TextField.TYPE_STORED))
-            classes = predictions[issue.identifier]
+            try:
+                classes = predictions[issue.identifier]
+            except KeyError:
+                raise MissingPrediction(issue.identifier, issue.key)
             for cls in ['existence', 'property', 'executive']:
                 doc.add(Field(cls, str(classes[cls]['prediction']).lower(), TextField.TYPE_STORED))
 

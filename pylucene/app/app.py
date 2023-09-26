@@ -7,7 +7,7 @@ import uvicorn
 
 import lucene
 
-from .adapter import IssueIndex, PredictionSelection
+from .adapter import IssueIndex, PredictionSelection, MissingPrediction
 from .config import SSL_KEYFILE, SSL_CERTFILE
 
 index = IssueIndex(loc='/index')
@@ -80,6 +80,19 @@ def add_predictions_index(request: CreateIndex):
             projects_by_repo=request.repos_and_projects
         )
         return {'result': 'done'}
+    except MissingPrediction as e:
+        return {
+            'result': 'missing-prediction',
+            'payload': {
+                'ident': e.ident,
+                'key': e.ident
+            }
+        }
+    except Exception as e:
+        return {
+            'result': 'unexpected-error',
+            'payload': str(e)
+        }
     finally:
         index_build_lock.release()
 
@@ -105,6 +118,11 @@ def search(request: Search):
         if not success:
             return {'result': 'missing-indexes', 'payload': payload}
         return {'result': 'done', 'payload': payload}
+    except Exception as e:
+        return {
+            'result': 'unexpected-error',
+            'payload': str(e)
+        }
     finally:
         index_build_lock.release()
 

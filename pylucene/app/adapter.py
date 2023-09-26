@@ -152,6 +152,8 @@ class IssueIndex:
                     continue
             for jira_repo, projects in projects_by_repo.items():
                 for project in projects:
+                    if jira_repo not in data['included-projects']:
+                        break 
                     if project not in data['included-projects'][jira_repo]:
                         break
                 else:

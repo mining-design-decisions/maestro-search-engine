@@ -133,6 +133,7 @@ class IssueIndex:
             except KeyError:
                 raise MissingPrediction(issue.identifier, issue.key)
             for cls in ['existence', 'property', 'executive']:
+                print(str(classes[cls]['prediction']).lower())
                 doc.add(Field(cls, str(classes[cls]['prediction']).lower(), TextField.TYPE_STORED))
 
             writer.addDocument(doc)
@@ -145,15 +146,20 @@ class IssueIndex:
                          model_id: str,
                          version_id: str) -> tuple[bool, None | str]:
         selected_index = None
-        for selected_index, data in self._metadata['indexes'].items():
+        for index, data in self._metadata['indexes'].items():
             if data['model']['id'] != model_id or data['model']['version'] != version_id:
                 if model_id is not None and version_id is not None:
                     continue
             for jira_repo, projects in projects_by_repo.items():
                 for project in projects:
                     if project not in data['included-projects'][jira_repo]:
-                        continue
-            break
+                        break
+                else:
+                    continue
+                break
+            else:
+                selected_index = index
+                break
         else:
             return False, None
         return selected_index is not None, selected_index

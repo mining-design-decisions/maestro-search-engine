@@ -2,6 +2,7 @@ import threading
 from typing import Optional
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Json
 import uvicorn
 
@@ -13,6 +14,13 @@ from .config import SSL_KEYFILE, SSL_CERTFILE
 index = IssueIndex(loc='/index')
 
 app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 initialized_vms = {}
 
 index_build_lock = threading.Lock()

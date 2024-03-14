@@ -1,5 +1,5 @@
 uvicorn==0.23.1
 fastapi==0.100.0
 requests==2.31.0
-issue_db_api
+issue_db_api==0.10.2
 pydantic==1.10.0

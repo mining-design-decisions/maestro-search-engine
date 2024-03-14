@@ -7,7 +7,7 @@ services:
     ports:
       - "8043:8043"
     networks:
-      - documents_traefik
+      - maestro_traefik
     volumes:
       - ./data:/index/
     environment:
@@ -24,7 +24,7 @@ services:
     build: ./status_proxy
     image: availability-proxy
     networks:
-      - documents_traefik
+      - maestro_traefik
     ports:
       - "8042:8042"
     environment:
@@ -38,5 +38,5 @@ services:
       - "traefik.enable=true"
 
 networks:
-  documents_traefik:
+  maestro_traefik:
     external: true

@@ -31,11 +31,13 @@ services:
       - SE_BACKEND_SERVER=http://pylucene:8043
       - SE_ALLOW_UNSAFE_SSL=TRUE
     labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.availability-proxy.rule=Host(`docker.localhost`)"
       - "traefik.http.routers.availability-proxy.rule=PathPrefix(`/search-engine`)"
+      - "traefik.http.routers.availability-proxy.entrypoints=websecure"
+      - "traefik.http.routers.availability-proxy.tls=true"
       - "traefik.http.routers.availability-proxy.middlewares=availability-proxy"
       - "traefik.http.middlewares.availability-proxy.stripprefix.prefixes=/search-engine"
-      - "traefik.http.routers.availability-proxy.entrypoints=web"
-      - "traefik.enable=true"
 
 networks:
   maestro_traefik:

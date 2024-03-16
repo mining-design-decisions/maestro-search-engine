@@ -5,7 +5,6 @@ import httpx
 import uvicorn
 import threading
 
-from .config import SSL_KEYFILE, SSL_CERTFILE
 
 app = fastapi.FastAPI(root_path="/search-engine")
 api_lock = threading.Lock()

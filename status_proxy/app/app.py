@@ -5,9 +5,8 @@ import httpx
 import uvicorn
 import threading
 
-from .config import SSL_KEYFILE, SSL_CERTFILE
 
-app = fastapi.FastAPI()
+app = fastapi.FastAPI(root_path="/search-engine")
 api_lock = threading.Lock()
 
 BACKEND_SERVER = os.environ['SE_BACKEND_SERVER']
@@ -55,8 +54,4 @@ def run_app():
         app,
         port=8042,
         host='0.0.0.0',
-        ssl_keyfile=SSL_KEYFILE,
-        ssl_certfile=SSL_CERTFILE,
     )
-
-

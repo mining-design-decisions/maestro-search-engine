@@ -7,23 +7,38 @@ services:
     ports:
       - "8043:8043"
     networks:
-      - pylucene-network
+      - maestro_traefik
     volumes:
       - ./data:/index/
     environment:
       - SE_ALLOW_UNSAFE_SSL=TRUE
+    labels:
+      - "traefik.http.routers.pylucene.rule=PathPrefix(`/pylucene`)"
+      - "traefik.http.routers.pylucene.middlewares=pylucene"
+      - "traefik.http.middlewares.pylucene.stripprefix.prefixes=/pylucene"
+      - "traefik.http.routers.pylucene.entrypoints=web"
+      - "traefik.enable=true"
+
   availability-proxy:
     container_name: availability-proxy
     build: ./status_proxy
     image: availability-proxy
     networks:
-      - pylucene-network
+      - maestro_traefik
     ports:
       - "8042:8042"
     environment:
-      - SE_BACKEND_SERVER=https://pylucene:8043
+      - SE_BACKEND_SERVER=http://pylucene:8043
       - SE_ALLOW_UNSAFE_SSL=TRUE
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.availability-proxy.rule=Host(`docker.localhost`)"
+      - "traefik.http.routers.availability-proxy.rule=PathPrefix(`/search-engine`)"
+      - "traefik.http.routers.availability-proxy.entrypoints=websecure"
+      - "traefik.http.routers.availability-proxy.tls=true"
+      - "traefik.http.routers.availability-proxy.middlewares=availability-proxy"
+      - "traefik.http.middlewares.availability-proxy.stripprefix.prefixes=/search-engine"
 
 networks:
-  pylucene-network:
-    driver: bridge
+  maestro_traefik:
+    external: true

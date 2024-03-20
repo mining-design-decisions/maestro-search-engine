@@ -8,7 +8,6 @@ import uvicorn
 import lucene
 
 from .adapter import IssueIndex, PredictionSelection, MissingPrediction
-from .config import SSL_KEYFILE, SSL_CERTFILE
 
 index = IssueIndex(loc='/index')
 
@@ -141,6 +140,4 @@ def run_app():
         app,
         port=8043,
         host='0.0.0.0',
-        ssl_keyfile=SSL_KEYFILE,
-        ssl_certfile=SSL_CERTFILE,
     )

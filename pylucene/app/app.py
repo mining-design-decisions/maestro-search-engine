@@ -11,7 +11,7 @@ from .adapter import IssueIndex, PredictionSelection, MissingPrediction
 
 index = IssueIndex(loc='/index')
 
-app = FastAPI()
+app = FastAPI(root_path="/pylucene")
 initialized_vms = {}
 
 index_build_lock = threading.Lock()

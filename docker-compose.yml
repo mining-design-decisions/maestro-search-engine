@@ -14,7 +14,7 @@ services:
       - SE_ALLOW_UNSAFE_SSL=TRUE
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.pylucene.rule=Host(`docker.localhost`)"
+      - "traefik.http.routers.pylucene.rule=Host(`maestro.localhost`)"
       - "traefik.http.routers.pylucene.rule=PathPrefix(`/pylucene`)"
       - "traefik.http.routers.pylucene.entrypoints=websecure"
       - "traefik.http.routers.pylucene.tls=true"
@@ -34,7 +34,7 @@ services:
       - SE_ALLOW_UNSAFE_SSL=TRUE
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.availability-proxy.rule=Host(`docker.localhost`)"
+      - "traefik.http.routers.availability-proxy.rule=Host(`maestro.localhost`)"
       - "traefik.http.routers.availability-proxy.rule=PathPrefix(`/search-engine`)"
       - "traefik.http.routers.availability-proxy.entrypoints=websecure"
       - "traefik.http.routers.availability-proxy.tls=true"

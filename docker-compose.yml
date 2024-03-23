@@ -13,11 +13,13 @@ services:
     environment:
       - SE_ALLOW_UNSAFE_SSL=TRUE
     labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.pylucene.rule=Host(`docker.localhost`)"
       - "traefik.http.routers.pylucene.rule=PathPrefix(`/pylucene`)"
+      - "traefik.http.routers.pylucene.entrypoints=websecure"
+      - "traefik.http.routers.pylucene.tls=true"
       - "traefik.http.routers.pylucene.middlewares=pylucene"
       - "traefik.http.middlewares.pylucene.stripprefix.prefixes=/pylucene"
-      - "traefik.http.routers.pylucene.entrypoints=web"
-      - "traefik.enable=true"
 
   availability-proxy:
     container_name: availability-proxy

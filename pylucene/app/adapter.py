@@ -3,6 +3,7 @@ import json
 import os
 import shutil
 
+import requests
 import issue_db_api
 
 import lucene
@@ -92,13 +93,16 @@ class IssueIndex:
         )
         issues = repo.search(
             query,
-            attributes=['key', 'summary', 'description']
+            attributes=['key', 'summary', 'description',"comments"]
         )
         predictions = {}
         if model_id is not None:
-            model = repo.get_model_by_id(model_id)
-            predictions = model.get_version_by_id(version_id).predictions
-
+            predictions = requests.get(f"http://172.30.0.1:8000/models/{model_id}/versions/{version_id}/predictions",
+                json={
+                    'issue_ids': [i.identifier for i in issues]
+                })
+            predictions = predictions.json()["predictions"]
+            
         # Setup Lucene stuff
         key = self._get_index_key(database_url, projects_by_repo, model_id, version_id)
         path = os.path.join(self._index_dir, key)
@@ -128,6 +132,7 @@ class IssueIndex:
             doc.add(Field('summary', issue.summary, StoredField.TYPE))
             doc.add(Field('description', issue.description, StoredField.TYPE))
             doc.add(Field('text', f'{issue.summary}. {issue.description}', TextField.TYPE_STORED))
+            doc.add(Field('comments',f'{issue.comments}', TextField.TYPE_STORED))
             if model_id is not None:
                 try:
                     classes = predictions[issue.identifier]
@@ -219,6 +224,7 @@ class IssueIndex:
                     "issue_key": doc.get("key"),
                     "summary": doc.get("summary"),
                     "description": doc.get("description"),
+                    "comments": doc.get("comments"),
                     "existence": doc.get("existence"),
                     "property": doc.get("property"),
                     "executive": doc.get("executive"),

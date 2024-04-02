@@ -27,5 +27,8 @@ RUN python3.10 -m pip install --upgrade pip setuptools
 RUN pip3 install setuptools_rust
 COPY requirements.txt requirements.txt
 RUN pip3 install -r requirements.txt
-COPY . .
+# COPY . .
+
 CMD ["python3.10", "-m", "app"]
+# CMD ["uvicorn", "app/app:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+# CMD ["uvicorn", "app.app:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

@@ -137,7 +137,8 @@ def _get_pred(x):
 
 def run_app():
     uvicorn.run(
-        app,
+        "app.app:app",
         port=8043,
         host='0.0.0.0',
+        reload=True
     )

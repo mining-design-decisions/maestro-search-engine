@@ -10,8 +10,10 @@ services:
       - maestro_traefik
     volumes:
       - ./data:/index/
+      - ./pylucene/:/python-docker
     environment:
       - SE_ALLOW_UNSAFE_SSL=TRUE
+      - DEBUG=TRUE
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.pylucene.rule=Host(`maestro.localhost`)"
@@ -30,7 +32,7 @@ services:
     ports:
       - "8042:8042"
     environment:
-      - SE_BACKEND_SERVER=http://pylucene:8043
+      - SE_BACKEND_SERVER=https://172.30.0.1:4269/pylucene
       - SE_ALLOW_UNSAFE_SSL=TRUE
     labels:
       - "traefik.enable=true"

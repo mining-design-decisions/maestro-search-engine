@@ -131,7 +131,7 @@ class IssueIndex:
             doc.add(Field('key', issue.key, StoredField.TYPE))
             doc.add(Field('summary', issue.summary, StoredField.TYPE))
             doc.add(Field('description', issue.description, StoredField.TYPE))
-            doc.add(Field('text', f'{issue.summary}. {issue.description}', TextField.TYPE_STORED))
+            doc.add(Field('text', f'{issue.summary}. {issue.description}. {issue.comments}', TextField.TYPE_STORED))
             doc.add(Field('comments',f'{issue.comments}', TextField.TYPE_STORED))
             if model_id is not None:
                 try:
@@ -139,7 +139,7 @@ class IssueIndex:
                 except KeyError:
                     raise MissingPrediction(issue.identifier, issue.key)
                 for cls in ['existence', 'property', 'executive']:
-                    print(str(classes[cls]['prediction']).lower())
+                    # print(str(classes[cls]['prediction']).lower())
                     doc.add(Field(cls, str(classes[cls]['prediction']).lower(), TextField.TYPE_STORED))
 
             writer.addDocument(doc)

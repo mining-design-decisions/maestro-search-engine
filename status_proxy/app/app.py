@@ -25,6 +25,7 @@ async def get_index_status(request: fastapi.Request):
 async def create_index(request: fastapi.Request):
     if api_lock.acquire(blocking=False):
         try:
+            # return await request.json()
             async with httpx.AsyncClient(verify=not ALLOW_UNSAFE_SSL, timeout=None) as client:
                 response = await client.post(f'{BACKEND_SERVER}/create-index',
                                              json=await request.json())
@@ -51,7 +52,8 @@ async def search(request: fastapi.Request):
 
 def run_app():
     uvicorn.run(
-        app,
+        "app.app:app",
         port=8042,
         host='0.0.0.0',
+        reload=True
     )

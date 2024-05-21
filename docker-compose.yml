@@ -31,6 +31,9 @@ services:
       - maestro_traefik
     ports:
       - "8042:8042"
+    volumes:
+      # - ./data:/index/
+      - ./status_proxy/app:/app
     environment:
       - SE_BACKEND_SERVER=https://172.30.0.1:4269/pylucene
       - SE_ALLOW_UNSAFE_SSL=TRUE

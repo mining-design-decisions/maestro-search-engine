@@ -93,7 +93,7 @@ class IssueIndex:
         )
         issues = repo.search(
             query,
-            attributes=['key', 'summary', 'description',"comments"]
+            attributes=['key', 'summary', 'description']
         )
         predictions = {}
         if model_id is not None:
@@ -131,8 +131,8 @@ class IssueIndex:
             doc.add(Field('key', issue.key, StoredField.TYPE))
             doc.add(Field('summary', issue.summary, StoredField.TYPE))
             doc.add(Field('description', issue.description, StoredField.TYPE))
-            doc.add(Field('text', f'{issue.summary}. {issue.description}. {issue.comments}', TextField.TYPE_STORED))
-            doc.add(Field('comments',f'{issue.comments}', TextField.TYPE_STORED))
+            doc.add(Field('text', f'{issue.summary}. {issue.description}', TextField.TYPE_STORED))
+            # doc.add(Field('comments',f'{issue.comments}', TextField.TYPE_STORED))
             if model_id is not None:
                 try:
                     classes = predictions[issue.identifier]
@@ -224,7 +224,7 @@ class IssueIndex:
                     "issue_key": doc.get("key"),
                     "summary": doc.get("summary"),
                     "description": doc.get("description"),
-                    "comments": doc.get("comments"),
+                    # "comments": doc.get("comments"),
                     "existence": doc.get("existence"),
                     "property": doc.get("property"),
                     "executive": doc.get("executive"),

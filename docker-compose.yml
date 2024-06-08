@@ -35,7 +35,7 @@ services:
       # - ./data:/index/
       - ./status_proxy/app:/app
     environment:
-      - SE_BACKEND_SERVER=https://172.30.0.1:4269/pylucene
+      - SE_BACKEND_SERVER=http://pylucene:8043
       - SE_ALLOW_UNSAFE_SSL=TRUE
     labels:
       - "traefik.enable=true"

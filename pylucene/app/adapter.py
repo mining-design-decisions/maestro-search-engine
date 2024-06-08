@@ -46,10 +46,7 @@ class IssueIndex:
     def _load_metadata(self):
         if not os.path.exists(self._metadata_file):
             with open(self._metadata_file, 'w') as file:
-                payload = {
-                    'indexes': {}
-                }
-                json.dump(payload, file)
+                json.dump({'indexes': {}}, file)
         with open(self._metadata_file) as file:
             return json.load(file)
 
@@ -75,10 +72,10 @@ class IssueIndex:
         return str(hash(key))
 
     def index_issues(self,
-                     database_url,
-                     projects_by_repo: dict[str, list[str]],
-                     model_id: str | None = None,
-                     version_id: str | None = None):
+                     database_url,  
+                     projects_by_repo: dict[str, list[str]], # projects name as repo
+                     model_id: str | None = None, # machine learning model id that should be used for predictions
+                     version_id: str | None = None): # version of that model
         # Retrieve data from API
         repo = issue_db_api.IssueRepository(
             database_url,
@@ -97,7 +94,8 @@ class IssueIndex:
         )
         predictions = {}
         if model_id is not None:
-            predictions = requests.get(f"http://172.30.0.1:8000/models/{model_id}/versions/{version_id}/predictions",
+            predictions = requests.get(f"http://100.64.15.32:8000/models/{model_id}/versions/{version_id}/predictions",
+            # predictions = requests.get(f"http://172.30.0.1:8000/models/{model_id}/versions/{version_id}/predictions",
                 json={
                     'issue_ids': [i.identifier for i in issues]
                 })
@@ -121,9 +119,21 @@ class IssueIndex:
         index_directory = SimpleFSDirectory(Paths.get(path))
         writer_config = IndexWriterConfig(StandardAnalyzer())
         writer = IndexWriter(index_directory, writer_config)
-
+        
+        issues_with_comments_count = 0
         # Store issues
         for issue in issues:
+            if predictions.get(issue.identifier) == None:
+                print("no prediction available")
+                continue
+            comments = ""
+            try:
+                if issue.comments:
+                    comments = issue.comments
+                    issues_with_comments_count += 1
+            except:
+                print("Catched PanicException:")
+                
             doc = Document()
             #doc.add(SortedDocValuesField('id', BytesRef(issue.identifier)))
             doc.add(Field('id', issue.identifier, TextField.TYPE_STORED))
@@ -131,13 +141,13 @@ class IssueIndex:
             doc.add(Field('key', issue.key, StoredField.TYPE))
             doc.add(Field('summary', issue.summary, StoredField.TYPE))
             doc.add(Field('description', issue.description, StoredField.TYPE))
-            doc.add(Field('text', f'{issue.summary}. {issue.description}', TextField.TYPE_STORED))
-            # doc.add(Field('comments',f'{issue.comments}', TextField.TYPE_STORED))
+            doc.add(Field('text', f'{issue.summary}. {issue.description}.{comments}', TextField.TYPE_STORED))
+            doc.add(Field('comments',f'{comments}', TextField.TYPE_STORED))
             if model_id is not None:
                 try:
                     classes = predictions[issue.identifier]
                 except KeyError:
-                    raise MissingPrediction(issue.identifier, issue.key)
+                    print(f"missingPredictions, {issue.identifier}, {issue.key}")
                 for cls in ['existence', 'property', 'executive']:
                     # print(str(classes[cls]['prediction']).lower())
                     doc.add(Field(cls, str(classes[cls]['prediction']).lower(), TextField.TYPE_STORED))
@@ -224,7 +234,7 @@ class IssueIndex:
                     "issue_key": doc.get("key"),
                     "summary": doc.get("summary"),
                     "description": doc.get("description"),
-                    # "comments": doc.get("comments"),
+                    "comments": doc.get("comments"),
                     "existence": doc.get("existence"),
                     "property": doc.get("property"),
                     "executive": doc.get("executive"),

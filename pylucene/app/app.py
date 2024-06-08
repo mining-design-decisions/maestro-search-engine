@@ -9,7 +9,7 @@ import lucene
 
 from .adapter import IssueIndex, PredictionSelection, MissingPrediction
 
-index = IssueIndex(loc='/index')
+index = IssueIndex(loc='/index') # location for the repo containing indexes data 
 
 app = FastAPI(root_path="/pylucene")
 initialized_vms = {}

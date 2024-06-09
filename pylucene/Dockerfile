@@ -27,5 +27,4 @@ RUN python3.10 -m pip install --upgrade pip setuptools
 RUN pip3 install setuptools_rust
 COPY requirements.txt requirements.txt
 RUN pip3 install -r requirements.txt
-COPY . .
 CMD ["python3.10", "-m", "app"]

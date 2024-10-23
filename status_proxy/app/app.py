@@ -51,7 +51,8 @@ async def search(request: fastapi.Request):
 
 def run_app():
     uvicorn.run(
-        app,
+        "app.app:app",
         port=8042,
         host='0.0.0.0',
+        reload=True
     )

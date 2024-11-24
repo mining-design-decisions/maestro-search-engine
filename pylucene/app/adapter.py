@@ -25,13 +25,13 @@ from org.apache.lucene.queryparser.classic import QueryParser
 from org.apache.lucene.search import IndexSearcher
 from org.apache.lucene.store import SimpleFSDirectory
 
-IP_ADDRESS = "maestro.localhost"
+IP_ADDRESS = "192.168.0.137"
 
 # Database connection parameters
 DB_NAME = 'issues'
 DB_USER = 'postgres'
 DB_PASSWORD = 'pass'
-DB_HOST = '192.168.0.137'
+DB_HOST = IP_ADDRESS
 DB_PORT = '5432'
 
 # Function to get attachments by issue ID from Jira API
@@ -365,9 +365,18 @@ class IssueIndex:
         cursor.close()
         conn.close()
         
-        if(predictions["existence"]!= PredictionSelection.EITHER and predictions["executive"]!= PredictionSelection.EITHER  and predictions["property"]!= PredictionSelection.EITHER):
+        if(predictions["existence"]!= PredictionSelection.EITHER or predictions["executive"]!= PredictionSelection.EITHER  or predictions["property"]!= PredictionSelection.EITHER):
+            self.w_ext = 1 if predictions["existence"] == PredictionSelection.TRUE else 0
+            self.w_exe = 1 if predictions["executive"] == PredictionSelection.TRUE else 0
+            self.w_prop = 1 if predictions["property"] == PredictionSelection.TRUE else 0
+
             # Rerank the response before returning
+            print("search for ",text_query," with reranking of pred:",f'search for \'{text_query}\', with reraking of prediction: existence:{self.w_exe}, executive:{self.w_ext}, property: {self.w_prop}')
+            
             response = self.rerank_issues(response)
+        else:
+            print("search for ",text_query," without reranking")
+
 
         return True, response[0:num_items]
             
@@ -409,9 +418,14 @@ class IssueIndex:
         # Select the weights for the 
         key = str(self.w_exe) +str(self.w_ext) + str(self.w_prop)
         weightsDict = {
-        "100": [0.67,0.33,0],
-        "010": [0.1,0.85,0.14],
-        "001": [0,.78,.22]
+        "110":[0.5,0.34,0.16],
+        "111":[0.333,0.333,0.333],
+        "100": [0.66,0.33,0],
+        "101": [0.33, 0.66,0],
+        "011": [0.01,0.85,0.14],
+        "010": [0.03,0.85,0.12],
+        "000": [0.04,0.71,0.25],
+        "001": [0,0.79,0.21]
         }
         w_exec_c,w_ext_c,w_prop_c = weightsDict[key]
 

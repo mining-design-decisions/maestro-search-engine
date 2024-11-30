@@ -2,30 +2,22 @@ import enum
 import json
 import os
 import shutil
+import concurrent.futures
 
 import requests
 import issue_db_api
 import psycopg2
 import numpy as np
 
-from pymongo import MongoClient
-from bson.objectid import ObjectId
-
-import lucene
 from java.nio.file import Paths
 from org.apache.lucene.analysis.standard import StandardAnalyzer
 from org.apache.lucene.document import Document, TextField, Field, StoredField
-from org.apache.lucene.index import (
-    IndexWriter,
-    IndexWriterConfig,
-    DirectoryReader,
-    MultiReader,
-)
+from org.apache.lucene.index import IndexWriter, IndexWriterConfig, DirectoryReader
 from org.apache.lucene.queryparser.classic import QueryParser
 from org.apache.lucene.search import IndexSearcher
 from org.apache.lucene.store import SimpleFSDirectory
 
-IP_ADDRESS = "192.168.0.137"
+IP_ADDRESS = "172.18.0.1"
 
 # Database connection parameters
 DB_NAME = 'issues'
@@ -34,25 +26,28 @@ DB_PASSWORD = 'pass'
 DB_HOST = IP_ADDRESS
 DB_PORT = '5432'
 
-# Function to get attachments by issue ID from Jira API
-def get_attachments_by_id(issue_id: str):
-    try:
-        url = f"https://issues.apache.org/jira/rest/api/2/issue/{issue_id}"
-        response = requests.get(url)
-        response.raise_for_status()  # Raise an exception for HTTP errors
-        data = response.json()
-        return data.get("fields", {}).get("attachment", [])
-    except requests.exceptions.RequestException as e:
-        print(f"Error fetching attachments: {e}")
-        return []
+# Function to get attachments by issue ID from Jira API (Parallelized)
+def get_attachments_for_issues(issue_ids):
+    def get_attachments(issue_id):
+        try:
+            url = f"https://issues.apache.org/jira/rest/api/2/issue/{issue_id}"
+            response = requests.get(url)
+            response.raise_for_status()
+            data = response.json()
+            return issue_id, data.get("fields", {}).get("attachment", [])
+        except requests.exceptions.RequestException as e:
+            print(f"Error fetching attachments for {issue_id}: {e}")
+            return issue_id, []
+
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        future_to_issue = {executor.submit(get_attachments, issue_id): issue_id for issue_id in issue_ids}
+        return {future.result()[0]: future.result()[1] for future in concurrent.futures.as_completed(future_to_issue)}
 
 class MissingPrediction(Exception):
-
     def __init__(self, ident, key):
         super().__init__(f'Missing prediction for issue {ident} ({key})')
         self.ident = ident
         self.key = key
-
 
 class PredictionSelection(enum.Enum):
     TRUE = enum.auto()
@@ -60,7 +55,6 @@ class PredictionSelection(enum.Enum):
     EITHER = enum.auto()
 
 class IssueIndex:
-
     def __init__(self, loc: str):
         self._base_dir = loc
         self._metadata_file = os.path.join(self._base_dir, 'index_data.json')
@@ -72,8 +66,7 @@ class IssueIndex:
         self.w_comments = 0.2
         self.w_exe = 0
         self.w_ext = 0
-        self.w_prop = 1
-
+        self.w_prop = 0
 
     def _load_metadata(self):
         if not os.path.exists(self._metadata_file):
@@ -91,10 +84,7 @@ class IssueIndex:
         return list(self._metadata['indexes'])
 
     @staticmethod
-    def _get_index_key(database_url: str,
-                       projects_by_repo: dict[str, list[str]],
-                       model_id: str | None,
-                       version_id: str | None) -> str:
+    def _get_index_key(database_url: str, projects_by_repo: dict[str, list[str]], model_id: str | None, version_id: str | None) -> str:
         key = (
             database_url,
             model_id,
@@ -102,7 +92,7 @@ class IssueIndex:
             tuple((key, tuple(value)) for key, value in projects_by_repo.items())
         )
         return str(hash(key))
-    
+
 
     
     def index_issues(self,
@@ -129,18 +119,19 @@ class IssueIndex:
             attributes=['key', 'summary', 'description']
         )
         
-        
+        # Fetch predictions if model_id is provided
         predictions = {}
         if model_id is not None:
             
             # predictions = requests.get(f"http://100.65.2.177:8000/models/{model_id}/versions/{version_id}/predictions",
-            # predictions = requests.get(f"http://{IP_ADDRESS}:8000/models/{model_id}/versions/{version_id}/predictions",
-            predictions = requests.get(f"https://{IP_ADDRESS}:4269/issues-db-api/models/{model_id}/versions/{version_id}/predictions",
+            predictions = requests.get(f"http://{IP_ADDRESS}:8000/models/{model_id}/versions/{version_id}/predictions",
+            # predictions = requests.get(f"https://{IP_ADDRESS}:4269/issues-db-api/models/{model_id}/versions/{version_id}/predictions",
             
             # predictions = requests.get(f"http://172.30.0.1:8000/models/{model_id}/versions/{version_id}/predictions",
                 json={
                     'issue_ids': [i.identifier for i in issues]
-                })
+                },
+                verify=False)
             predictions = predictions.json()["predictions"]
         
         # Connect to the database
@@ -159,11 +150,8 @@ class IssueIndex:
             with conn.cursor() as cursor:
                 allComments = self.get_comments(issue_ids, cursor)
         
-        comments = "".join(str(comment[4]) for comment in allComments.get("TAJO-719",[]))
-        print(comments)
         
-        
-        # Setup Lucene stuff
+        # Setup Lucene index
         key = self._get_index_key(database_url, projects_by_repo, model_id, version_id)
         path = os.path.join(self._index_dir, key)
         if key in self._metadata['indexes']:
@@ -189,7 +177,7 @@ class IssueIndex:
                 continue
             
             comments = "".join(str(comment[4]) for comment in allComments.get(issue.key,[]))
-                
+
             doc = Document()
             #doc.add(SortedDocValuesField('id', BytesRef(issue.identifier)))
             doc.add(Field('id', issue.identifier, TextField.TYPE_STORED))
@@ -197,9 +185,8 @@ class IssueIndex:
             doc.add(Field('key', issue.key, StoredField.TYPE))
             doc.add(Field('summary', issue.summary, StoredField.TYPE))
             doc.add(Field('description', issue.description, StoredField.TYPE))
-            # Boosting the 'text' field
             
-            # doc.add(Field('text', f'{issue.summary}. {issue.description}.{comments}', TextField.TYPE_STORED))
+            doc.add(Field('text', f'{issue.summary}. {issue.description}.{comments}', TextField.TYPE_STORED))
             doc.add(Field('comments',f'{comments}', TextField.TYPE_STORED))
             if model_id is not None:
                 try:
@@ -243,31 +230,20 @@ class IssueIndex:
         print(selected_index)
         return selected_index is not None, selected_index
 
-    
-
-    def get_comments(self,issue_ids,cursor):
+    def get_comments(self, issue_ids, cursor):
         if not issue_ids:
             return {}
 
         try:
             query = (
-                "SELECT id, issue_id, author_name, author_display_name, body "
-                "FROM issues_comments WHERE issue_id = ANY(%s) ORDER BY id"
-            )
-            
-            query = (
-                "SELECT ic.id AS id, ic.issue_id as issue_id, ic.author_name as author_name, ic.author_display_name as author_display_name, ic.body, cr.classification_result, ic.is_bot as is_bot "
+                "SELECT ic.id AS id, ic.issue_id as issue_id, ic.author_name as author_name, ic.author_display_name as author_display_name, ic.body, cr.classification_result "
                 "FROM issues_comments ic "
                 "LEFT JOIN classification_results cr ON ic.id = cr.issue_comment_id "
-                "WHERE " 
-                "LENGTH(ic.body) > 200 "
-                "AND ic.is_bot = false "
-                "AND ic.issue_id = ANY(%s) "
+                "WHERE LENGTH(ic.body) > 200 AND ic.is_bot = false AND ic.issue_id = ANY(%s) "
                 "ORDER BY ic.id;"
             )
             cursor.execute(query, (issue_ids,))
             comments = cursor.fetchall()
-            
         except Exception as e:
             print(e)
             return {}
@@ -276,7 +252,7 @@ class IssueIndex:
         for comment in comments:
             comments_dict.setdefault(comment[1], []).append(comment)
         return comments_dict
-    
+
     def search(self,
                text_query,
                projects_by_repo: dict[str, list[str]],
@@ -312,40 +288,33 @@ class IssueIndex:
 
         hits = searcher.search(query, num_items +100)
         
-        
+        print("has been hits",len(hits.scoreDocs))
         
         # Connect to the database
         conn = psycopg2.connect(
             dbname=DB_NAME,
             user=DB_USER,
             password=DB_PASSWORD,
-            host=DB_HOST,
+            host="131.234.28.135",
             port=DB_PORT
         )
-        cursor = conn.cursor()
         issue_ids = [searcher.doc(hit.doc).get("key") for hit in hits.scoreDocs]
         
         with conn:
             with conn.cursor() as cursor:
                 comments = self.get_comments(issue_ids, cursor)
 
+        # Fetch attachments in parallel
+        attachments = get_attachments_for_issues(issue_ids)
+
+        # Prepare response
         response = []
         for hit in hits.scoreDocs:
             doc = searcher.doc(hit.doc)
-            
-            # Fetch attachments using the helper method
-            attachments = get_attachments_by_id(str(doc.get("id")).replace("Apache-",""))
             issue_id = doc.get("key")
             response.append(
                 {
                     "hit_score": hit.score,
-                    # "issue_id": doc.get("issue_id").encode("utf-8"),
-                    # "issue_key": doc.get("issue_key").encode("utf-8"),
-                    # "summary": doc.get("summary").encode("utf-8"),
-                    # "description": doc.get("description").encode('utf8'),
-                    # "existence": doc.get("existence").encode("utf-8"),
-                    # "property": doc.get("property").encode("utf-8"),
-                    # "executive": doc.get("executive").encode("utf-8"),
                     "issue_id": doc.get("id"),
                     "issue_key": doc.get("key"),
                     "summary": doc.get("summary"),
@@ -357,30 +326,22 @@ class IssueIndex:
                     "property_confidence": doc.get("property_confidence"),
                     "executive": doc.get("executive"),
                     "executive_confidence": doc.get("executive_confidence"),
-                    "attachments": attachments
-                    
+                    "attachments": attachments.get(issue_id, [])
                 }
             )
-            # Close the cursor and connection
-        cursor.close()
+        
+        # Close connection
         conn.close()
         
         if(predictions["existence"]!= PredictionSelection.EITHER or predictions["executive"]!= PredictionSelection.EITHER  or predictions["property"]!= PredictionSelection.EITHER):
             self.w_ext = 1 if predictions["existence"] == PredictionSelection.TRUE else 0
             self.w_exe = 1 if predictions["executive"] == PredictionSelection.TRUE else 0
             self.w_prop = 1 if predictions["property"] == PredictionSelection.TRUE else 0
-
-            # Rerank the response before returning
-            print("search for ",text_query," with reranking of pred:",f'search for \'{text_query}\', with reraking of prediction: existence:{self.w_exe}, executive:{self.w_ext}, property: {self.w_prop}')
-            
             response = self.rerank_issues(response)
-        else:
-            print("search for ",text_query," without reranking")
 
+        return True, response[:num_items]
 
-        return True, response[0:num_items]
-            
-    def calculate_new_score(self, issue, max_hit_score,):
+    def calculate_new_score(self, issue, max_hit_score):
         # Normalize hit score
         s = issue['hit_score'] / max_hit_score if max_hit_score != 0 else 0
         
@@ -388,74 +349,57 @@ class IssueIndex:
         exe = float(issue['executive_confidence'])
         prop = float(issue['property_confidence'])
         
+        # Extract comment confidences
+        ext_C_values = [comment[4]['existence']['confidence'] for comment in issue['comments'] if comment[4] and 'existence' in comment[4]]
+        exe_C_values = [comment[4]['executive']['confidence'] for comment in issue['comments'] if comment[4] and 'executive' in comment[4]]
+        prop_C_values = [comment[4]['property']['confidence'] for comment in issue['comments'] if comment[4] and 'property' in comment[4]]
         
-        
-        # Initialize comment confidences to empty lists
-        ext_C_values = []
-        exe_C_values = []
-        prop_C_values = []
-        
-        comment_count = 0
-        if issue['comments']:
-            
-            # Extract comment confidences and ignore None values
-            for comment in issue['comments']:
-                comment_count = comment_count +1
-                if comment[5] is not None:
-                    comment_confidences = comment[5]
-                    if comment_confidences['existence']['confidence'] is not None:
-                        ext_C_values.append(comment_confidences['existence']['confidence'])
-                    if comment_confidences['executive']['confidence'] is not None:
-                        exe_C_values.append(comment_confidences['executive']['confidence'])
-                    if comment_confidences['property']['confidence'] is not None:
-                        prop_C_values.append(comment_confidences['property']['confidence'])
-        
-        # Calculate average confidences for comments, default to 0 if no valid values
+        # Calculate average confidences for comments
         ext_C = np.mean(ext_C_values) if ext_C_values else 0
         exe_C = np.mean(exe_C_values) if exe_C_values else 0
         prop_C = np.mean(prop_C_values) if prop_C_values else 0
         
-        # Select the weights for the 
-        key = str(self.w_exe) +str(self.w_ext) + str(self.w_prop)
+        # Select the weights for the score calculation
+        key = str(self.w_exe) + str(self.w_ext) + str(self.w_prop)
         weightsDict = {
-        "110":[0.5,0.34,0.16],
-        "111":[0.333,0.333,0.333],
-        "100": [0.66,0.33,0],
-        "101": [0.33, 0.66,0],
-        "011": [0.01,0.85,0.14],
-        "010": [0.03,0.85,0.12],
-        "000": [0.04,0.71,0.25],
-        "001": [0,0.79,0.21]
+            "110": [0.5, 0.34, 0.16],
+            "111": [0.333, 0.333, 0.333],
+            "100": [0.66, 0.33, 0],
+            "101": [0.33, 0.66, 0],
+            "011": [0.01, 0.85, 0.14],
+            "010": [0.03, 0.85, 0.12],
+            "000": [0.04, 0.71, 0.25],
+            "001": [0, 0.79, 0.21]
         }
-        w_exec_c,w_ext_c,w_prop_c = weightsDict[key]
-
+        w_exec_c, w_ext_c, w_prop_c = weightsDict.get(key, [0.33, 0.33, 0.33])
 
         # Normalize issue weights
         total_issue_weight = self.w_exe + self.w_ext + self.w_prop
-        w_exe_normalized = self.w_exe / total_issue_weight
-        w_ext_normalized = self.w_ext / total_issue_weight
-        w_prop_normalized = self.w_prop / total_issue_weight
+        w_exe_normalized = self.w_exe / total_issue_weight if total_issue_weight != 0 else 0
+        w_ext_normalized = self.w_ext / total_issue_weight if total_issue_weight != 0 else 0
+        w_prop_normalized = self.w_prop / total_issue_weight if total_issue_weight != 0 else 0
         
-        n = comment_count
+        n = len(issue['comments'])
 
         # Calculate the new score
         new_score = (
             self.w_s * s +
-            (1-self.w_s)*((np.log(4)/(np.log(4)+np.log(n +1))) *((w_exe_normalized * exe + w_ext_normalized * ext + w_prop_normalized * prop)) +
-            (np.log(n+1) /(np.log(4)+np.log(n+1)))* ((w_exec_c * exe_C + w_ext_c * ext_C + w_prop_c * prop_C)))
+            (1 - self.w_s) * (
+                (np.log(4) / (np.log(4) + np.log(n + 1))) * ((w_exe_normalized * exe + w_ext_normalized * ext + w_prop_normalized * prop)) +
+                (np.log(n + 1) / (np.log(4) + np.log(n + 1))) * ((w_exec_c * exe_C + w_ext_c * ext_C + w_prop_c * prop_C))
+            )
         )
         
         return new_score
 
     def rerank_issues(self, issues):
-        print("reranking issues _-------------------")
-        # Find the maximum hit score
         max_hit_score = max(issue['hit_score'] for issue in issues)
-        
-        # Calculate the new score for each issue
         for issue in issues:
             issue['hit_score'] = self.calculate_new_score(issue, max_hit_score)
-            
+        return sorted(issues, key=lambda x: x['hit_score'], reverse=True)
+                        
         # Sort issues by 'new_score' in descending order
+        reranked_issues = sorted(issues, key=lambda x: x['hit_score'], reverse=True)
+        return reranked_issues        # Sort issues by 'new_score' in descending order
         reranked_issues = sorted(issues, key=lambda x: x['hit_score'], reverse=True)
         return reranked_issues

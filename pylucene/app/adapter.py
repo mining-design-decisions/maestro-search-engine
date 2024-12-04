@@ -67,6 +67,7 @@ class IssueIndex:
         self.w_exe = 0
         self.w_ext = 0
         self.w_prop = 0
+        self.comments_per_issue= 5;
 
     def _load_metadata(self):
         if not os.path.exists(self._metadata_file):
@@ -273,14 +274,6 @@ class IssueIndex:
 
         # Build query
         parts = [f'text: {text_query}']
-        # for cls, selector in predictions.items():
-        #     match selector:
-        #         case PredictionSelection.TRUE:
-        #             parts.append(f'{cls}: true')
-        #         case PredictionSelection.FALSE:
-        #             parts.append(f'{cls}: false')
-        #         case _:
-        #             pass
         
         query = QueryParser('text', StandardAnalyzer()).parse(
             ' AND '.join(parts)
@@ -397,8 +390,8 @@ class IssueIndex:
         new_score = (
             self.w_s * s +
             (1 - self.w_s) * (
-                (np.log(4) / (np.log(4) + np.log(n + 1))) * ((w_exe_normalized * exe + w_ext_normalized * ext + w_prop_normalized * prop)) +
-                (np.log(n + 1) / (np.log(4) + np.log(n + 1))) * ((w_exec_c * exe_C + w_ext_c * ext_C + w_prop_c * prop_C))
+                (np.log(self.comments_per_issue) / (np.log(self.comments_per_issue) + np.log(n + 1))) * ((w_exe_normalized * exe + w_ext_normalized * ext + w_prop_normalized * prop)) +
+                (np.log(n + 1) / (np.log(self.comments_per_issue) + np.log(n + 1))) * ((w_exec_c * exe_C + w_ext_c * ext_C + w_prop_c * prop_C))
             )
         )
 
@@ -409,9 +402,3 @@ class IssueIndex:
         for issue in issues:
             issue['hit_score'] = self.calculate_new_score(issue, max_hit_score)
         return sorted(issues, key=lambda x: x['hit_score'], reverse=True)
-                        
-        # Sort issues by 'new_score' in descending order
-        reranked_issues = sorted(issues, key=lambda x: x['hit_score'], reverse=True)
-        return reranked_issues        # Sort issues by 'new_score' in descending order
-        reranked_issues = sorted(issues, key=lambda x: x['hit_score'], reverse=True)
-        return reranked_issues

@@ -17,7 +17,7 @@ from org.apache.lucene.queryparser.classic import QueryParser
 from org.apache.lucene.search import IndexSearcher
 from org.apache.lucene.store import SimpleFSDirectory
 
-IP_ADDRESS = "172.18.0.1"
+IP_ADDRESS = "192.168.0.137"
 
 # Database connection parameters
 DB_NAME = 'issues'
@@ -344,21 +344,33 @@ class IssueIndex:
     def calculate_new_score(self, issue, max_hit_score):
         # Normalize hit score
         s = issue['hit_score'] / max_hit_score if max_hit_score != 0 else 0
-        
-        ext = float(issue['existence_confidence'])
-        exe = float(issue['executive_confidence'])
-        prop = float(issue['property_confidence'])
-        
+
+        ext = float(issue.get('existence_confidence', 0))
+        exe = float(issue.get('executive_confidence', 0))
+        prop = float(issue.get('property_confidence', 0))
+
         # Extract comment confidences
-        ext_C_values = [comment[4]['existence']['confidence'] for comment in issue['comments'] if comment[4] and 'existence' in comment[4]]
-        exe_C_values = [comment[4]['executive']['confidence'] for comment in issue['comments'] if comment[4] and 'executive' in comment[4]]
-        prop_C_values = [comment[4]['property']['confidence'] for comment in issue['comments'] if comment[4] and 'property' in comment[4]]
-        
+        ext_C_values = [
+            comment.get('existence', {}).get('confidence', 0) 
+            for comment in issue['comments'] 
+            if isinstance(comment, dict) and 'existence' in comment
+        ]
+        exe_C_values = [
+            comment.get('executive', {}).get('confidence', 0) 
+            for comment in issue['comments'] 
+            if isinstance(comment, dict) and 'executive' in comment
+        ]
+        prop_C_values = [
+            comment.get('property', {}).get('confidence', 0) 
+            for comment in issue['comments'] 
+            if isinstance(comment, dict) and 'property' in comment
+        ]
+
         # Calculate average confidences for comments
         ext_C = np.mean(ext_C_values) if ext_C_values else 0
         exe_C = np.mean(exe_C_values) if exe_C_values else 0
         prop_C = np.mean(prop_C_values) if prop_C_values else 0
-        
+
         # Select the weights for the score calculation
         key = str(self.w_exe) + str(self.w_ext) + str(self.w_prop)
         weightsDict = {
@@ -378,7 +390,7 @@ class IssueIndex:
         w_exe_normalized = self.w_exe / total_issue_weight if total_issue_weight != 0 else 0
         w_ext_normalized = self.w_ext / total_issue_weight if total_issue_weight != 0 else 0
         w_prop_normalized = self.w_prop / total_issue_weight if total_issue_weight != 0 else 0
-        
+
         n = len(issue['comments'])
 
         # Calculate the new score
@@ -389,7 +401,7 @@ class IssueIndex:
                 (np.log(n + 1) / (np.log(4) + np.log(n + 1))) * ((w_exec_c * exe_C + w_ext_c * ext_C + w_prop_c * prop_C))
             )
         )
-        
+
         return new_score
 
     def rerank_issues(self, issues):

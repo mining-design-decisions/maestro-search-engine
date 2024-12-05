@@ -17,7 +17,7 @@ from org.apache.lucene.queryparser.classic import QueryParser
 from org.apache.lucene.search import IndexSearcher
 from org.apache.lucene.store import SimpleFSDirectory
 
-IP_ADDRESS = "192.168.0.137"
+IP_ADDRESS = "131.234.28.135"
 
 # Database connection parameters
 DB_NAME = 'issues'
@@ -281,8 +281,11 @@ class IssueIndex:
 
         hits = searcher.search(query, num_items +100)
         
-        print("has been hits",len(hits.scoreDocs))
         
+        print("has been hits",len(hits.scoreDocs))
+        if len(hits.scoreDocs) == 0:
+            return True,[]
+                
         # Connect to the database
         conn = psycopg2.connect(
             dbname=DB_NAME,
